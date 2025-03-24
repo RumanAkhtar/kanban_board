@@ -8,7 +8,14 @@ import Link from "next/link"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Mail, Lock, User, Loader2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
@@ -46,7 +53,8 @@ export default function RegisterPage() {
 
       toast({
         title: "Account created",
-        description: "Your account has been created successfully. Please log in.",
+        description:
+          "Your account has been created successfully. Please log in.",
         variant: "default",
       })
 
@@ -73,6 +81,7 @@ export default function RegisterPage() {
           aria-label="Toggle theme"
         >
           <span className="sr-only">Toggle theme</span>
+          {/* Sun icon */}
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="20"
@@ -95,6 +104,7 @@ export default function RegisterPage() {
             <path d="M6.34 17.66l-1.41 1.41"></path>
             <path d="M19.07 4.93l-1.41 1.41"></path>
           </svg>
+          {/* Moon icon */}
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="20"
@@ -126,13 +136,20 @@ export default function RegisterPage() {
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    transition={{ type: "spring", stiffness: 500, damping: 30, delay: 0.2 }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 500,
+                      damping: 30,
+                      delay: 0.2,
+                    }}
                     className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center"
                   >
                     <span className="text-white font-bold text-xl">K</span>
                   </motion.div>
                 </div>
-                <CardTitle className="text-2xl font-bold text-center">Create an account</CardTitle>
+                <CardTitle className="text-2xl font-bold text-center">
+                  Create an account
+                </CardTitle>
                 <CardDescription className="text-center">
                   Enter your information to create your Kanban board account
                 </CardDescription>
@@ -144,6 +161,7 @@ export default function RegisterPage() {
                       {error}
                     </div>
                   )}
+                  {/* Name */}
                   <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -164,6 +182,7 @@ export default function RegisterPage() {
                       />
                     </div>
                   </motion.div>
+                  {/* Email */}
                   <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -176,7 +195,7 @@ export default function RegisterPage() {
                       <Input
                         id="email"
                         type="email"
-                        placeholder="name@example.com"
+                        placeholder="you@example.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="pl-10"
@@ -184,6 +203,7 @@ export default function RegisterPage() {
                       />
                     </div>
                   </motion.div>
+                  {/* Password */}
                   <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -196,6 +216,7 @@ export default function RegisterPage() {
                       <Input
                         id="password"
                         type="password"
+                        placeholder="••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="pl-10"
@@ -233,7 +254,10 @@ export default function RegisterPage() {
                     className="text-center text-sm"
                   >
                     Already have an account?{" "}
-                    <Link href="/login" className="text-primary hover:underline font-medium">
+                    <Link
+                      href="/login"
+                      className="text-primary hover:underline font-medium"
+                    >
                       Login
                     </Link>
                   </motion.div>
@@ -243,6 +267,7 @@ export default function RegisterPage() {
           </motion.div>
         </div>
 
+        {/* Side visual */}
         <div className="hidden md:flex md:flex-1 relative overflow-hidden">
           <motion.div
             initial={{ opacity: 0 }}
@@ -275,4 +300,3 @@ export default function RegisterPage() {
     </div>
   )
 }
-
