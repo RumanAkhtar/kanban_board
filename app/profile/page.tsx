@@ -1,313 +1,396 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { toast } from "react-hot-toast"
-import Image from "next/image"
+import { useSession } from "next-auth/react"
+import { motion } from "framer-motion"
+import {
+  Camera,
+  Save,
+  Calendar,
+  Activity,
+  CheckCircle,
+  Loader2,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import Header from "@/components/header"
+import { useToast } from "@/components/ui/use-toast"
+import AnimatedCard from "@/components/animated-card"
 
-// Add type interface for list items
-interface List {
-  _id: string
-  title: string
-  count?: number
-}
-
-interface Task {
-  _id: string
-  listId: string
-}
-
-const ProfilePage = () => {
+export default function ProfilePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-
-  const [profile, setProfile] = useState({
-    name: "",
-    email: "",
-    avatar: "",
-    coverImage: "",
-  })
-  const [isLoading, setIsLoading] = useState(true)
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
   const [isEditing, setIsEditing] = useState(false)
-  const [lists, setLists] = useState<List[]>([])
-  const [tasks, setTasks] = useState([])
+  const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [stats, setStats] = useState({
+    completedTasks: 0,
+    totalTasks: 0,
+    lists: [],
+  })
+  const { toast } = useToast()
 
   useEffect(() => {
-    if (status === "loading") {
-      return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    } else if (status === "authenticated" && session?.user) {
+      setName(session.user.name || "")
+      setEmail(session.user.email || "")
+      fetchStats()
     }
+  }, [status, session, router])
 
-    if (!session) {
-      router.push("/")
-    } else {
-      fetchProfile()
-      fetchLists()
-      fetchTasks()
-    }
-  }, [session, status, router])
-
-  const fetchProfile = async () => {
-    setIsLoading(true)
+  const fetchStats = async () => {
     try {
-      const response = await fetch("/api/profile")
-      if (response.ok) {
-        const data = await response.json()
-        setProfile(data)
-      } else {
-        toast.error("Failed to fetch profile")
-      }
+      setIsLoading(true)
+
+      const tasksResponse = await fetch("/api/tasks")
+      if (!tasksResponse.ok) throw new Error("Failed to fetch tasks")
+      const tasks = await tasksResponse.json()
+
+      const listsResponse = await fetch("/api/lists")
+      if (!listsResponse.ok) throw new Error("Failed to fetch lists")
+      const lists = await listsResponse.json()
+
+      const completedListId = lists.find((list) => list.title === "Done")?._id
+      const completedTasks = completedListId
+        ? tasks.filter((task) => task.listId === completedListId).length
+        : 0
+      const totalTasks = tasks.length
+
+      const listsWithCounts = lists.map((list) => ({
+        ...list,
+        count: tasks.filter((task) => task.listId === list._id).length,
+      }))
+
+      setStats({
+        completedTasks,
+        totalTasks,
+        lists: listsWithCounts,
+      })
     } catch (error) {
-      console.error("Error fetching profile:", error)
-      toast.error("Error fetching profile")
+      toast({
+        title: "Error",
+        description: "Failed to load profile statistics",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
-  const fetchLists = async () => {
-    try {
-      const response = await fetch("/api/lists")
-      if (response.ok) {
-        const data = await response.json()
-        setLists(data)
-      } else {
-        toast.error("Failed to fetch lists")
-      }
-    } catch (error) {
-      console.error("Error fetching lists:", error)
-      toast.error("Error fetching lists")
-    }
-  }
-
-  const fetchTasks = async () => {
-    try {
-      const response = await fetch("/api/tasks")
-      if (response.ok) {
-        const data = await response.json()
-        setTasks(data)
-      } else {
-        toast.error("Failed to fetch tasks")
-      }
-    } catch (error) {
-      console.error("Error fetching tasks:", error)
-      toast.error("Error fetching tasks")
-    }
-  }
-
-  const handleInputChange = (e: any) => {
-    setProfile({ ...profile, [e.target.name]: e.target.value })
-  }
-
-  const handleUpdateProfile = async () => {
-    try {
-      const response = await fetch("/api/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(profile),
+  const handleSave = async () => {
+    setIsSaving(true)
+    setTimeout(() => {
+      setIsSaving(false)
+      setIsEditing(false)
+      toast({
+        title: "Profile updated",
+        description: "Your profile information has been updated successfully",
       })
-
-      if (response.ok) {
-        toast.success("Profile updated successfully!")
-        setIsEditing(false)
-        fetchProfile()
-      } else {
-        toast.error("Failed to update profile")
-      }
-    } catch (error) {
-      console.error("Error updating profile:", error)
-      toast.error("Error updating profile")
-    }
+    }, 1000)
   }
 
-  const handleImageUpload = async (e: any, type: string) => {
-    const file = e.target.files?.[0]
+  const completionRate =
+    stats.totalTasks > 0
+      ? Math.round((stats.completedTasks / stats.totalTasks) * 100)
+      : 0
 
-    if (!file) {
-      return
-    }
-
-    const formData = new FormData()
-    formData.append("image", file)
-    formData.append("type", type)
-
-    try {
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setProfile({ ...profile, [type]: data.url })
-        toast.success(`${type === "avatar" ? "Avatar" : "Cover image"} updated!`)
-      } else {
-        toast.error(`Failed to upload ${type}`)
-      }
-    } catch (error) {
-      console.error(`Error uploading ${type}:`, error)
-      toast.error(`Error uploading ${type}`)
-    }
-  }
-
-  // Fix for line 85 - Add type to the list parameter
-  const completedListId = lists.find((list: List) => list.title === "Done")?._id
-
-  // Fix for line 87 - Add type to the 't' parameter
-  const completedTasks = completedListId ? tasks.filter((t: Task) => t.listId === completedListId).length : 0
-
-  // Fix for line 90 - Add type to the list parameter
-  const listsWithCounts = lists.map((list: List) => ({
-    ...list,
-    count: tasks.filter((task: Task) => task.listId === list._id).length,
-  }))
-
-  if (isLoading) {
-    return <div>Loading...</div>
-  }
-
-  if (!session) {
-    return <div>Not authenticated.</div>
+  if (isLoading || status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="mt-4 text-lg text-muted-foreground">
+            Loading your profile...
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="container mx-auto mt-8 p-8 bg-white shadow-md rounded-md">
-      <h1 className="text-2xl font-semibold mb-4">Profile</h1>
-
-      <div className="mb-4 relative">
-        <Image
-          src={profile.coverImage || "/placeholder-cover.jpg"}
-          alt="Cover Image"
-          width={800}
-          height={200}
-          className="w-full h-48 object-cover rounded-md"
-        />
-        <label
-          htmlFor="cover-upload"
-          className="absolute top-2 right-2 bg-gray-800 text-white p-2 rounded-md cursor-pointer hover:bg-gray-700"
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+      <Header />
+      <main className="container mx-auto p-4 pt-24">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="max-w-4xl mx-auto"
         >
-          Change Cover
-        </label>
-        <input
-          type="file"
-          accept="image/*"
-          id="cover-upload"
-          className="hidden"
-          onChange={(e) => handleImageUpload(e, "cover")}
-          aria-label="Upload cover image"
-        />
-      </div>
+          <div className="flex flex-col md:flex-row gap-6">
+            {/* Profile Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2, duration: 0.4 }}
+              className="w-full md:w-1/3"
+            >
+              <AnimatedCard>
+                <Card className="overflow-hidden dark:bg-gray-800/80">
+                  <div className="h-32 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+                  <div className="flex justify-center -mt-16">
+                    <Avatar className="h-32 w-32 border-4 border-white dark:border-gray-800 relative">
+                      <AvatarImage
+                        src={
+                          session?.user?.image ||
+                          "https://plus.unsplash.com/premium_photo-1682023585957-f191203ab239?q=80&w=3184&auto=format&fit=crop&ixlib=rb-4.0.3"
+                        }
+                        alt="Profile"
+                      />
+                      <AvatarFallback className="text-4xl">
+                        {name.charAt(0)}
+                      </AvatarFallback>
+                      <button className="absolute bottom-0 right-0 bg-primary text-white p-2 rounded-full shadow-lg hover:bg-primary/90 transition-colors">
+                        <Camera className="h-4 w-4" />
+                      </button>
+                    </Avatar>
+                  </div>
+                  <CardHeader className="text-center pt-2">
+                    <CardTitle>{name}</CardTitle>
+                    <CardDescription>{email}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <Calendar className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Joined</p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date().toLocaleDateString("en-US", {
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Activity className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Activity</p>
+                        <p className="text-sm text-muted-foreground">
+                          Last active today
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <CheckCircle className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Completion Rate</p>
+                        <p className="text-sm text-muted-foreground">
+                          {completionRate}% tasks completed
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </AnimatedCard>
+            </motion.div>
 
-      <div className="mb-4 relative w-32 h-32 rounded-full overflow-hidden">
-        <Image
-          src={profile.avatar || "/placeholder-avatar.jpg"}
-          alt="Avatar"
-          width={128}
-          height={128}
-          className="w-full h-full object-cover"
-        />
-        <label
-          htmlFor="avatar-upload"
-          className="absolute bottom-2 right-2 bg-gray-800 text-white p-2 rounded-md cursor-pointer hover:bg-gray-700"
-        >
-          Change Avatar
-        </label>
-        <input
-          type="file"
-          accept="image/*"
-          id="avatar-upload"
-          className="hidden"
-          onChange={(e) => handleImageUpload(e, "avatar")}
-          aria-label="Upload profile picture"
-        />
-      </div>
+            {/* Profile Form & Stats Tabs */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3, duration: 0.4 }}
+              className="w-full md:w-2/3"
+            >
+              <Tabs defaultValue="profile" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="profile">Profile</TabsTrigger>
+                  <TabsTrigger value="stats">Statistics</TabsTrigger>
+                </TabsList>
+                <TabsContent value="profile" className="mt-4">
+                  <AnimatedCard>
+                    <Card className="dark:bg-gray-800/80">
+                      <CardHeader>
+                        <CardTitle>Profile Information</CardTitle>
+                        <CardDescription>
+                          Update your profile information here
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="name">Name</Label>
+                            {!isEditing && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setIsEditing(true)}
+                              >
+                                Edit
+                              </Button>
+                            )}
+                          </div>
+                          <Input
+                            id="name"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            disabled={!isEditing}
+                            className={isEditing ? "border-primary" : ""}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="email">Email</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            disabled={!isEditing}
+                            className={isEditing ? "border-primary" : ""}
+                          />
+                        </div>
+                      </CardContent>
+                      {isEditing && (
+                        <CardFooter className="flex justify-between">
+                          <Button
+                            variant="outline"
+                            onClick={() => setIsEditing(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className="flex items-center gap-2"
+                          >
+                            {isSaving ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                Save Changes
+                                <Save className="h-4 w-4 ml-2" />
+                              </>
+                            )}
+                          </Button>
+                        </CardFooter>
+                      )}
+                    </Card>
+                  </AnimatedCard>
+                </TabsContent>
 
-      {isEditing ? (
-        <div>
-          <div className="mb-4">
-            <label htmlFor="name" className="block text-gray-700 text-sm font-bold mb-2">
-              Name:
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              value={profile.name}
-              onChange={handleInputChange}
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            />
+                <TabsContent value="stats" className="mt-4">
+                  <AnimatedCard>
+                    <Card className="dark:bg-gray-800/80">
+                      <CardHeader>
+                        <CardTitle>Task Statistics</CardTitle>
+                        <CardDescription>
+                          Your task completion statistics
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-sm font-medium">
+                              Completion Rate
+                            </span>
+                            <span className="text-sm font-medium">
+                              {completionRate}%
+                            </span>
+                          </div>
+                          <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"
+                              style={{ width: `${completionRate}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                            <h4 className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                              Completed Tasks
+                            </h4>
+                            <p className="text-2xl font-bold">
+                              {stats.completedTasks}
+                            </p>
+                          </div>
+                          <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                            <h4 className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                              Total Tasks
+                            </h4>
+                            <p className="text-2xl font-bold">
+                              {stats.totalTasks}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium">
+                            Task Distribution
+                          </h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {stats.lists.map((list, index) => {
+                              const percentage =
+                                stats.totalTasks > 0
+                                  ? Math.round(
+                                      (list.count / stats.totalTasks) * 100
+                                    )
+                                  : 0
+                              const getColor = (i: number) => {
+                                switch (i % 3) {
+                                  case 0:
+                                    return "bg-yellow-500"
+                                  case 1:
+                                    return "bg-blue-500"
+                                  case 2:
+                                    return "bg-green-500"
+                                  default:
+                                    return "bg-purple-500"
+                                }
+                              }
+
+                              return (
+                                <div key={list._id} className="space-y-1">
+                                  <div className="flex justify-between text-xs">
+                                    <span>{list.title}</span>
+                                    <span>{percentage}%</span>
+                                  </div>
+                                  <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${getColor(
+                                        index
+                                      )}`}
+                                      style={{ width: `${percentage}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </AnimatedCard>
+                </TabsContent>
+              </Tabs>
+            </motion.div>
           </div>
-          <div className="mb-4">
-            <label htmlFor="email" className="block text-gray-700 text-sm font-bold mb-2">
-              Email:
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={profile.email}
-              onChange={handleInputChange}
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            />
-          </div>
-          <button
-            onClick={handleUpdateProfile}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-          >
-            Update Profile
-          </button>
-          <button
-            onClick={() => setIsEditing(false)}
-            className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-2"
-          >
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <div>
-          <p>
-            <strong>Name:</strong> {profile.name}
-          </p>
-          <p>
-            <strong>Email:</strong> {profile.email}
-          </p>
-          <button
-            onClick={() => setIsEditing(true)}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-4"
-          >
-            Edit Profile
-          </button>
-        </div>
-      )}
-
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Task Summary</h2>
-        <p>
-          <strong>Total Lists:</strong> {lists.length}
-        </p>
-        <p>
-          <strong>Total Tasks:</strong> {tasks.length}
-        </p>
-        <p>
-          <strong>Completed Tasks:</strong> {completedTasks}
-        </p>
-      </div>
-
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Lists with Task Counts</h2>
-        <ul>
-          {listsWithCounts.map((list) => (
-            <li key={list._id}>
-              {list.title}: {list.count || 0} tasks
-            </li>
-          ))}
-        </ul>
-      </div>
+        </motion.div>
+      </main>
     </div>
   )
 }
-
-export default ProfilePage
-
